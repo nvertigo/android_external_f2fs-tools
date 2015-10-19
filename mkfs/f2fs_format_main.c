@@ -51,6 +51,8 @@ static void mkfs_usage()
 	MSG(0, "  -o overprovision ratio [default:5]\n");
 	MSG(0, "  -O [feature list] e.g. \"encrypt\"\n");
 	MSG(0, "  -q quiet mode\n");
+	MSG(0, "  -r reserved_bytes [default:0]\n");
+	MSG(0, "     (use only device_size-reserved_bytes for filesystem)\n");
 	MSG(0, "  -s # of segments per section [default:1]\n");
 	MSG(0, "  -S sparse mode\n");
 	MSG(0, "  -t 0: nodiscard, 1: discard [default:1]\n");
@@ -105,7 +107,7 @@ static void parse_feature(const char *features)
 
 static void f2fs_parse_options(int argc, char *argv[])
 {
-	static const char *option_string = "qa:c:d:e:l:mo:O:s:S:z:t:fw:";
+	static const char *option_string = "qa:c:d:e:l:mo:O:s:S:z:t:fw:r:";
 	int32_t option=0;
 
 	while ((option = getopt(argc,argv,option_string)) != EOF) {
@@ -171,6 +173,9 @@ static void f2fs_parse_options(int argc, char *argv[])
 			break;
 		case 'w':
 			c.wanted_sector_size = atoi(optarg);
+			break;
+		case 'r':
+			config.bytes_reserved = atoi(optarg);
 			break;
 		default:
 			MSG(0, "\tError: Unknown option %c\n",option);
@@ -300,6 +305,7 @@ static int f2fs_check_overwrite(void)
 
 int main(int argc, char *argv[])
 {
+	MSG(0, "\n\tF2FS-tools: mkfs.f2fs Ver: %s (%s) [modified by Motorola to reserve space]\n\n",
 	f2fs_init_configuration();
 
 	f2fs_parse_options(argc, argv);
