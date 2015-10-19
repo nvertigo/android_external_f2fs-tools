@@ -625,6 +625,7 @@ void f2fs_init_configuration(void)
 	c.kd = -1;
 	c.dry_run = 0;
 	c.fixed_time = -1;
+	c->bytes_reserved = 0;
 }
 
 #ifdef HAVE_SETMNTENT
@@ -810,13 +811,24 @@ int get_device_info(int i)
 		return -1;
 	}
 
-	if (c.sparse_mode) {
-		dev->total_sectors = c.device_size / dev->sector_size;
-	} else if (S_ISREG(stat_buf->st_mode)) {
-		dev->total_sectors = stat_buf->st_size / dev->sector_size;
-	} else if (S_ISBLK(stat_buf->st_mode)) {
+	if (S_ISREG(stat_buf.st_mode)) {
+		if (c->bytes_reserved >= stat_buf.st_size) {
+			MSG(0, "\n\Error: reserved bytes (%u) is bigger than the device size (%u bytes)\n",
+			    (unsigned int) c->bytes_reserved,
+			    (unsigned int) stat_buf.st_size);
+			return -1;
+		}
+
+		c->total_sectors = (stat_buf.st_size - c->bytes_reserved) / c->sector_size;
+
+                if (c->bytes_reserved) {
+                        MSG(0, "Info: Reserved %u bytes ", (unsigned int) c->bytes_reserved);
+                        MSG(0, "from device of size %u sectors\n",
+			    (unsigned int) (stat_buf.st_size / c->sector_size));
+                }
+	} else if (S_ISBLK(stat_buf.st_mode)) {
 #ifdef BLKSSZGET
-		if (ioctl(fd, BLKSSZGET, &sector_size) < 0)
+		if (ioctl(fd, BLKSSZGET, &sector_size) < 0) {
 			MSG(0, "\tError: Using the default sector size\n");
 		else if (dev->sector_size < sector_size)
 			dev->sector_size = sector_size;
@@ -869,6 +881,32 @@ int get_device_info(int i)
 			printf("\n");
 		}
 #endif
+
+		if (c->bytes_reserved) {
+			unsigned int reserved_sectors;
+
+			reserved_sectors = c->bytes_reserved / c->sector_size;
+			if (c->bytes_reserved % c->sector_size) {reserved_sectors++;}
+
+			if(reserved_sectors >= c->total_sectors) {
+				MSG(0, "\n\Error: reserved bytes (%u sectors) is bigger than the device size (%u sectors)\n",
+				    (unsigned int) reserved_sectors,
+				    (unsigned int) c->total_sectors);
+				return -1;
+			}
+
+			MSG(0, "\n");
+			MSG(0, "Info: Reserved %u sectors ", (unsigned int) reserved_sectors);
+			MSG(0, "from device of size %u sectors\n",
+			    (unsigned int) c->total_sectors);
+
+			c->total_sectors -= reserved_sectors;
+		}
+
+		if (ioctl(fd, HDIO_GETGEO, &geom) < 0)
+			c->start_sector = 0;
+		else
+			c->start_sector = geom.start;
 	} else {
 		MSG(0, "\tError: Volume type is not supported!!!\n");
 		free(stat_buf);
